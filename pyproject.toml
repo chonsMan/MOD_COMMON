@@ -1,0 +1,13 @@
+# Shared, simulator-free code for the PSLF and PSS(R)E Test Runners (MOD_PSLF\04_GUI_V3, MOD_PSSE\04_GUI_V1).
+# Install editable into each app's .venv:  ..\MOD_PSLF\.venv\Scripts\python -m pip install -e .
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mod_runner"
+version = "0.1.0"
+requires-python = ">=3.14"
+
+[tool.setuptools.packages.find]
+include = ["mod_runner*"]
