@@ -70,6 +70,9 @@ def plot_flat_run(df, play=None, v_base=None, report=False, title=None, ctx=None
     return fig
 
 
+MEASURED_STYLE = "--"   # play-in (measured) traces are dashed in every plot; model traces stay solid
+
+
 # ---------------------------------------------- Play-in context -------------------------------------------------------#
 # ctx (from meta.json "plot_ctx"): {"shift": s, ...}
 #   shift      measured time is shifted by this so the measured step lines up with t_step
@@ -90,6 +93,7 @@ def plot_mod026_vref(df, play, v_base, report=False, title=None, ctx=None):
     ax.plot(_a(df["time"]), _a(df["poc_v"]), linewidth=s["line"], color=COLORS[2], label="Voltage (model)")
     if play is not None:
         ax.plot(_play_time(play, ctx), _play_voltage_pu(play, v_base), linewidth=s["line"], color=COLORS[1],
+                linestyle=MEASURED_STYLE,
                 label="Voltage (measured)")
     _finish(ax, s, "POI Voltage [p.u.]", t_max)
 
@@ -97,6 +101,7 @@ def plot_mod026_vref(df, play, v_base, report=False, title=None, ctx=None):
     ax.plot(_a(df["time"]), _a(df["poc_q"]), linewidth=s["line"], color=COLORS[3], label="Reactive Power (model)")
     if play is not None:
         ax.plot(_play_time(play, ctx), _a(play["Reactive Power"]), linewidth=s["line"], color=COLORS[4],
+                linestyle=MEASURED_STYLE,
                 label="Reactive Power (measured)")
     _finish(ax, s, "POI Reactive Power [MVAr]", t_max)
     return fig
@@ -108,6 +113,7 @@ def _single(df, play, report, title, col, play_col, name, ylabel, ctx):
     ax.plot(_a(df["time"]), _a(df[col]), linewidth=s["line"], color=COLORS[2], label=f"{name} (model)")
     if play is not None:
         ax.plot(_play_time(play, ctx), _a(play[play_col]), linewidth=s["line"], color=COLORS[1],
+                linestyle=MEASURED_STYLE,
                 label=f"{name} (measured)")
     _finish(ax, s, ylabel, _a(df["time"]).max() - 1)
     return fig

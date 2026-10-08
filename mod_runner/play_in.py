@@ -187,6 +187,101 @@ def detect_step(df, plant_mva=None, start_samples=1):
     return best
 
 
+# Step time of a step test (fills t_step in the form). Measured steps are rarely clean: a voltage can jump in one sample,
+# a plant's P ramps (or settles exponentially) after an Fref step, 1 s data drawn as straight lines shows the step as a
+# knee, the signal may drift before it, and high-rate data is noisy. So, per signal:
+#   1. the main move = where the smoothed signal first gets STEP_CROSS of its largest excursion from the start level;
+#   2. walk back from there while the backward slope is still more than STEP_KNEE of the main move's slope. The slope
+#      window grows with the noise so noise can't stop the walk early;
+#   3. when the window had to grow, refine with a local least-squares break fit (line, then a jump and a slope change);
+#   4. a move whose slope is not clearly steeper than the signal before it (STEP_DRIFT) is drift, not a step.
+# The step time returned is the LAST SAMPLE STILL AT THE OLD LEVEL (where the plotted measured line starts to move). On
+# coarse data the step happened somewhere between that sample and the next, and recorders stamp the new value at the
+# end of the interval: a 1 s play-in showing 225 kV at 5 s and 228 kV at 6 s was a step at 5 s. On fine data the
+# difference is one sample.
+STEP_SMOOTH = 0.1      # [s] rolling-median width
+STEP_BASE = 1.0        # [s] start level = median of the first STEP_BASE seconds (at least 2 samples)
+STEP_CROSS = 0.2       # the main move: first time the signal is this fraction of its largest excursion away
+STEP_SLOPE_W = 0.125   # [s] shortest backward slope window (at least 1 sample)
+STEP_KNEE = 0.2        # the step starts where the slope drops below this fraction of the main move's slope
+STEP_DRIFT = 3.0       # the main move must be this many times steeper than the trend before it
+STEP_MIN = {"Voltage": 0.002, "Frequency": 0.0005}   # smallest step that counts, as a fraction of the level ...
+STEP_MIN_MW = 1.0      # ... and for Real / Reactive Power, in MW / MVAr
+
+
+def _slopes(t, xs, h):
+    back = np.clip(np.arange(len(t)) - h, 0, None)
+    return (xs - xs[back]) / np.maximum(t - t[back], 1e-9)
+
+
+def _break_fit(t, x):
+    """Sample time tk that best fits x ~ a + b t + c [t >= tk] + d max(0, t - tk) (least squares)."""
+    best_sse, best_tk = np.inf, None
+    for k in range(1, len(t) - 1):
+        a = np.column_stack([np.ones_like(t), t - t[0], (t >= t[k]).astype(float), np.maximum(0.0, t - t[k])])
+        coef, *_ = np.linalg.lstsq(a, x, rcond=None)
+        sse = float(np.sum((a @ coef - x) ** 2))
+        if sse < best_sse:
+            best_sse, best_tk = sse, float(t[k])
+    return best_tk
+
+
+def find_step_time(df, signals):
+    """(time, signal) where the measured step starts (the last sample before it moves), from the first of `signals`
+    (play-in column names) that has a clear step, or (None, None). Frequency columns of -1 (no data) are skipped."""
+    for col in signals:
+        if col not in df.columns or "Time" not in df.columns:
+            continue
+        t = pd.to_numeric(df["Time"], errors="coerce").to_numpy(dtype=float)
+        x = pd.to_numeric(df[col], errors="coerce").to_numpy(dtype=float)
+        ok = ~(np.isnan(t) | np.isnan(x)) & ((x > 0) if col == "Frequency" else True)
+        order = np.argsort(t[ok], kind="stable")
+        t, x = t[ok][order], x[ok][order]
+        if len(t) < 4:
+            continue
+        dt = float(np.median(np.diff(t)))
+        if not dt > 0:
+            continue
+        n_smooth = max(1, int(round(STEP_SMOOTH / dt)))
+        xs = pd.Series(x).rolling(n_smooth, center=True, min_periods=1).median().to_numpy()
+        base = t < t[0] + STEP_BASE
+        if base.sum() < 2:
+            base = np.arange(len(t)) < 2
+        level = float(np.median(x[base]))
+        noise = 1.4826 * float(np.median(np.abs(x[base] - level)))
+        dev = np.abs(xs - level)
+        peak = float(dev.max())
+        smallest = max(STEP_MIN[col] * abs(level) if col in STEP_MIN else STEP_MIN_MW, 15.0 * noise)
+        if peak < smallest:
+            continue                                       # nothing on this signal that stands out as a step
+
+        i_move = int(np.argmax(dev >= STEP_CROSS * peak))
+        h = max(1, int(round(STEP_SLOPE_W / dt)))
+        ref = _slopes(t, xs, h)[i_move]
+        # Window long enough that noise moves the slope by well under STEP_KNEE of the main slope
+        h_noise = int(np.ceil(4.0 * noise / (STEP_KNEE * abs(ref) * dt))) if ref else h
+        h = min(max(h, h_noise), max(1, len(t) // 4))
+        slope = _slopes(t, xs, h)
+        ref = slope[i_move]
+        i = i_move
+        while i > 0 and slope[i - 1] * np.sign(ref) > STEP_KNEE * abs(ref):
+            i -= 1
+
+        if t[i] < t[0] + STEP_BASE:
+            continue                                       # moving from the start: no steady level before a step
+        pre = t < t[i]                                     # the trend before the step must be much flatter
+        if abs(ref) < STEP_DRIFT * abs(np.polyfit(t[pre], x[pre], 1)[0]):
+            continue                                       # only drift
+        if h * dt > 2 * STEP_SLOPE_W:                      # long (noisy) window: the walk stops late; refine
+            near = np.nonzero((t >= t[i] - 2 * h * dt) & (t <= t[i] + h * dt))[0]
+            if len(near) >= 6:
+                tk = _break_fit(t[near], x[near])
+                if tk is not None:
+                    i = int(np.searchsorted(t, tk))
+        return float(t[max(i - 1, 0)]), col               # i is the first moving sample
+    return None, None
+
+
 def compute_initial_conditions(df, window=IC_WINDOW, min_samples=IC_MIN_SAMPLES, method="mean",
                                plant_mva=None) -> InitialConditions:
     """V0/P0/Q0 from the start of a play-in, following rules a-e at the top of this file."""

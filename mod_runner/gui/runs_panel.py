@@ -132,7 +132,8 @@ def save_runs(run_dirs, target):
         with open(os.path.join(d, "config.json")) as fh:
             v = json.load(fh).get("values", {})
         for key, folder in (("sav", settings.MODELS_DIR), ("dyd", settings.MODELS_DIR), ("dyr", settings.MODELS_DIR),
-                            ("play_in", settings.PLAY_IN_DIR)):
+                            ("play_in", settings.PLAY_IN_DIR), ("playback_excel", settings.PLAYBACK_DIR),
+                            ("playback_file", settings.PLAYBACK_DIR)):
             if v.get(key):
                 wanted.setdefault(os.path.join(folder, v[key]) if not os.path.isabs(v[key]) else v[key], d)
     for path in [p for p in wanted if p.lower().endswith(".dyd") and os.path.isfile(p)]:
