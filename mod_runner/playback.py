@@ -4,7 +4,7 @@
 # Version: v1 (shared)
 # Purpose: Grid playback profiles for the Vreg / Freg Step tests: read one from Excel or build a single step
 # Notes:   Simulator-free (shared by the PSLF and PSS(R)E Test Runners). Each app writes the profile in its own format
-#          (PSLF gencls "plyfil" .txt, PSS(R)E PLBVF1 .plb). Plan: MOD_PSLF\06_MARKDOWN\Grid_Playback_Plan.md.
+#          (PSLF gencls "plyfil" .txt, PSS(R)E PLBVF1 .plb). Plan: MOD_PSLF\06_MARKDOWN\completed\Grid_Playback_Plan.md.
 #          A profile is a list of (time [s], value) points; signal "v" = voltage, "f" = frequency.
 #          Excel layout: first sheet, header row, columns Time and Voltage (or Frequency).
 #            Voltage:   median < 2 -> p.u., otherwise kV

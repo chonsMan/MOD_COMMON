@@ -4,7 +4,7 @@
 # Version: v1 (shared)
 # Purpose: Find the tie-lines between the POC and the slack bus (Vreg Step sets them to R/X/B from the form)
 # Notes:   Simulator-free (shared by the PSLF and PSS(R)E Test Runners): each app reads its in-service lines (no
-#          transformers) and changes the ones returned here. Plan: MOD_PSLF\06_MARKDOWN\Grid_Playback_Plan.md.
+#          transformers) and changes the ones returned here. Plan: MOD_PSLF\06_MARKDOWN\completed\Grid_Playback_Plan.md.
 #######################################################################################################################
 from collections import deque
 
